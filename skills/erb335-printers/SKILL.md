@@ -13,9 +13,9 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 
 ## Fleet on `Skynet` (8 Printers)
 
-### 4× Creality Ender-3 S1 Pro (OctoPrint — HTTP `:80`)
+### 4× Creality Ender-3 S1 Pro (OctoPrint - HTTP `:80`)
 - **Specs:** 220 × 220 × 270 mm, 0.4 mm nozzle, all-metal Sprite extruder (up to 300°C), heated bed (up to 110°C).
-- **Filaments:** **PLA and PETG** supported (match slicer temps to the loaded spool — e.g., ~200°C / 60°C for PLA, ~230–245°C / 70–80°C for PETG). ABS is prohibited due to fumes.
+- **Filaments:** **PLA and PETG** supported (match slicer temps to the loaded spool - e.g., ~200°C / 60°C for PLA, ~230-245°C / 70-80°C for PETG). ABS is prohibited due to fumes.
 - **Slicer Note:** OctoPrint's internal profile on these printers is left at `Generic RepRap Printer` (200×200×200 mm). Always slice using a **Creality Ender-3 S1 Pro** profile.
 - **Auth:** Username `student`, password `student` (session login `/api/login` + `X-CSRF-Token`, no API key).
 

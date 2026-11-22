@@ -1,4 +1,4 @@
-# ERB 335 Printers — Universal Agent Skill & CLI
+# ERB 335 Printers - Universal Agent Skill & CLI
 
 Zero-dependency Python 3 CLI and universal **Agent Skill** (`SKILL.md`) for the **UTA ERB 335 Senior Design Lab** 3D printers on `Skynet` Wi-Fi:
 - **4× Creality Ender-3 S1 Pro** via OctoPrint (`steve`, `saed`, `kate`, `chris`)
@@ -10,7 +10,7 @@ Works out of the box with **Antigravity**, **Claude Code**, **OpenAI Codex**, an
 
 ## One-Command Install
 
-### Windows (PowerShell — Antigravity, Claude Code, Codex + global `erb335-printers` CLI)
+### Windows (PowerShell - Antigravity, Claude Code, Codex + global `erb335-printers` CLI)
 ```powershell
 irm https://raw.githubusercontent.com/RyanHailey21/erb335-printers/main/install.ps1 | iex
 ```

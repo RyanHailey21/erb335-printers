@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""UTA ERB 335 3D Printers CLI — Skynet Wi-Fi + OctoPrint + Bambu Lab LAN control.
+"""UTA ERB 335 3D Printers CLI - Skynet Wi-Fi + OctoPrint + Bambu Lab LAN control.
 
 Zero external dependencies (Python 3 standard library only).
 """
