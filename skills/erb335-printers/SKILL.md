@@ -36,8 +36,9 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 | `192.168.50.111` | `01P00A442101323` | P1S / P1P (`01P00A`) |
 | `192.168.50.112` | `03919C450503017` | A1 (`039`) |
 
-## Lab Rules
-- Verify the physical bed is clear, filament is loaded, and no Out of Order tag is posted before printing.
+## Lab Rules & Pre-Print Checklist
+- **Always render and inspect slice previews before printing:** Never start a print on any printer (OctoPrint or Bambu Lab) without first rendering and showing/checking the G-code preview images (first layer + isometric view via `gcode_preview.py` or the slicer) to verify flat orientation, bed fit, zero overlaps, and support placement.
+- Verify the physical bed is clear, filament is loaded and matches the sliced material/temps, and no Out of Order tag is posted before printing.
 - Supervise initial layers in person; control OctoPrint printers via OctoPrint rather than the touchscreen.
 
 ## CLI Reference (`erb335-printers`)
