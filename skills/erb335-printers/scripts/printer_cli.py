@@ -834,9 +834,13 @@ def cmd_job(args: argparse.Namespace) -> int:
             bambu_mqtt_start_project(ip, info["serial"], info["access_code"], args.file)
             print(f"Sent project_file start for '{args.file}' on Bambu {name} ({ip}).")
             return 0
+        if args.action == "done":
+            bambu_mqtt_command(ip, info["serial"], info["access_code"], {"print": {"sequence_id": "1003", "command": "ams_control", "param": "done"}})
+            print(f"Sent 'ams_control: done' to Bambu {name} ({ip}).")
+            return 0
         cmd_map = {"pause": "pause", "resume": "resume", "cancel": "stop"}
         if args.action not in cmd_map:
-            print("Bambu LAN MQTT supports: start (--file), pause, resume, cancel (stop).", file=sys.stderr)
+            print("Bambu LAN MQTT supports: start (--file), pause, resume, cancel (stop), done.", file=sys.stderr)
             return 1
         bambu_mqtt_command(ip, info["serial"], info["access_code"], {"print": {"sequence_id": "0", "command": cmd_map[args.action], "param": ""}})
         print(f"Sent '{cmd_map[args.action]}' to Bambu {name} ({ip}). (Requires Developer Mode on locked-down firmware.)")
@@ -973,7 +977,7 @@ def build_parser() -> argparse.ArgumentParser:
     # job
     p_jb = sub.add_parser("job", help="Control current print job")
     p_jb.add_argument("printer")
-    p_jb.add_argument("action", choices=["start", "pause", "resume", "cancel"])
+    p_jb.add_argument("action", choices=["start", "pause", "resume", "cancel", "done"])
     p_jb.add_argument("--file", default=None, help="Remote .gcode filename on SD card (for Bambu 'job start')")
 
     # temp
