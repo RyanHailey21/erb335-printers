@@ -27,7 +27,7 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 | **Chris** | `chris.local` | `192.168.50.107` | Excluded from default `status` (pass `--all`) |
 
 ### 4× Bambu Lab Printers (LAN MQTT `:8883` + FTPS `:990`)
-*(Requires each printer's 8-digit LAN Access Code for status/FTPS, plus **LAN Only Mode + Developer Mode** enabled on the touchscreen for automated `upload --print` / `job start` over LAN MQTT. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved.)*
+*(Requires each printer's 8-digit LAN Access Code for status/FTPS, plus **LAN Only Mode + Developer Mode** enabled on the touchscreen for automated `upload --print` / `job start` over LAN MQTT. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved. For Cloud-mode Bambu printers started via **Device -> MicroSD Card**, export native `.gcode.3mf` with `--export-3mf <bare-filename>` + `--outputdir` so `Metadata/slice_info.config` and thumbnails are included.)*
 
 | IP | Serial (TLS Cert) | Model |
 | :--- | :--- | :--- |
@@ -72,6 +72,7 @@ erb335-printers job a1 start --file part.gcode.3mf
 erb335-printers temp steve --tool 235 --bed 75   # PETG example
 erb335-printers temp steve --tool 200 --bed 60   # PLA example
 erb335-printers job steve start                  # start | pause | resume | cancel
+erb335-printers job a1 done                      # confirm external-spool load prompt (07FF-8007) over MQTT
 erb335-printers watch h2d --interval 5           # live monitor (works for OctoPrint & Bambu)
 
 # OctoPrint serial connection
