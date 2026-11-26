@@ -27,7 +27,7 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 | **Chris** | `chris.local` | `192.168.50.107` | Excluded from default `status` (pass `--all`) |
 
 ### 4× Bambu Lab Printers (LAN MQTT `:8883` + FTPS `:990`)
-*(Requires each printer's 8-digit LAN Access Code to authenticate over MQTT/FTPS.)*
+*(Requires each printer's 8-digit LAN Access Code for status/FTPS, plus **LAN Only Mode + Developer Mode** enabled on the touchscreen for automated `upload --print` / `job start` over LAN MQTT. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved.)*
 
 | IP | Serial (TLS Cert) | Model |
 | :--- | :--- | :--- |
