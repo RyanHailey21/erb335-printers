@@ -329,13 +329,17 @@ def _local_subnet_prefix() -> str:
     return "192.168.50"
 
 
+def _bambu_tls_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def _probe_bambu_tls_serial(ip: str, timeout: float = 0.6) -> str | None:
     try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         with socket.create_connection((ip, 8883), timeout=timeout) as sock:
-            with ctx.wrap_socket(sock, server_hostname=ip) as ssock:
+            with _bambu_tls_context().wrap_socket(sock, server_hostname=ip) as ssock:
                 der = ssock.getpeercert(binary_form=True)
                 # Bambu serials are 15-char alphanumeric (e.g. 0948AD532300868, 01P00C4B2900458, 03919C450503017)
                 matches = re.findall(rb"(?:00M|01P|01S|030|039|094)[A-Z0-9]{12}", der)
@@ -408,84 +412,74 @@ def _mqtt_str(s: str) -> bytes:
     return struct.pack("!H", len(b)) + b
 
 
+def _bambu_mqtt_connect(ip: str, access_code: str, timeout: float) -> ssl.SSLSocket:
+    raw = socket.create_connection((ip, 8883), timeout=timeout)
+    s = _bambu_tls_context().wrap_socket(raw, server_hostname=ip)
+    s.settimeout(timeout)
+    vh = _mqtt_str("MQTT") + bytes([4, 0xC2, 0, 60])
+    pl = _mqtt_str(f"erb335-{uuid.uuid4().hex[:6]}") + _mqtt_str("bblp") + _mqtt_str(access_code)
+    s.sendall(bytes([0x10]) + _mqtt_encode_len(len(vh) + len(pl)) + vh + pl)
+    hdr = s.recv(4)
+    if len(hdr) < 4 or hdr[0] != 0x20 or hdr[3] != 0:
+        s.close()
+        raise RuntimeError(f"MQTT CONNACK rejected (code={hdr[3] if len(hdr) >= 4 else '?'})")
+    return s
+
+
 def bambu_mqtt_query(ip: str, serial: str, access_code: str, timeout: float = 5.0) -> dict[str, Any]:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((ip, 8883), timeout=timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=ip) as s:
-            s.settimeout(timeout)
-            vh = _mqtt_str("MQTT") + bytes([4, 0xC2, 0, 60])
-            pl = _mqtt_str(f"erb335-{uuid.uuid4().hex[:6]}") + _mqtt_str("bblp") + _mqtt_str(access_code)
-            s.sendall(bytes([0x10]) + _mqtt_encode_len(len(vh) + len(pl)) + vh + pl)
+    with _bambu_mqtt_connect(ip, access_code, timeout) as s:
+        vh_sub = struct.pack("!H", 1)
+        pl_sub = _mqtt_str(f"device/{serial}/report") + bytes([0])
+        s.sendall(bytes([0x82]) + _mqtt_encode_len(len(vh_sub) + len(pl_sub)) + vh_sub + pl_sub)
 
-            hdr = s.recv(4)
-            if len(hdr) < 4 or hdr[0] != 0x20 or hdr[3] != 0:
-                raise RuntimeError(f"MQTT CONNACK rejected (code={hdr[3] if len(hdr) >= 4 else '?'})")
+        msg = json.dumps({"pushing": {"sequence_id": "0", "command": "pushall"}}).encode("utf-8")
+        vh_pub = _mqtt_str(f"device/{serial}/request")
+        s.sendall(bytes([0x30]) + _mqtt_encode_len(len(vh_pub) + len(msg)) + vh_pub + msg)
 
-            vh_sub = struct.pack("!H", 1)
-            pl_sub = _mqtt_str(f"device/{serial}/report") + bytes([0])
-            s.sendall(bytes([0x82]) + _mqtt_encode_len(len(vh_sub) + len(pl_sub)) + vh_sub + pl_sub)
-
-            msg = json.dumps({"pushing": {"sequence_id": "0", "command": "pushall"}}).encode("utf-8")
-            vh_pub = _mqtt_str(f"device/{serial}/request")
-            s.sendall(bytes([0x30]) + _mqtt_encode_len(len(vh_pub) + len(msg)) + vh_pub + msg)
-
-            buf = bytearray()
-            deadline = time.time() + timeout
-            while time.time() < deadline:
-                try:
-                    chunk = s.recv(65536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
-                    while len(buf) >= 2:
-                        ptype = buf[0] >> 4
-                        mult, val, idx = 1, 0, 1
-                        while idx < len(buf):
-                            b = buf[idx]
-                            val += (b & 0x7F) * mult
-                            idx += 1
-                            if not (b & 0x80):
-                                break
-                            mult *= 128
-                        else:
-                            break
-                        if len(buf) < idx + val:
-                            break
-                        pkt = bytes(buf[idx : idx + val])
-                        del buf[: idx + val]
-                        if ptype == 3:
-                            tlen = struct.unpack("!H", pkt[:2])[0]
-                            payload = pkt[2 + tlen :]
-                            try:
-                                data = json.loads(payload.decode("utf-8", "ignore"))
-                                if "print" in data and len(data["print"]) > 3:
-                                    return data["print"]
-                            except Exception:
-                                pass
-                except socket.timeout:
+        buf = bytearray()
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                chunk = s.recv(65536)
+                if not chunk:
                     break
-            raise TimeoutError("No status report received from Bambu printer")
+                buf.extend(chunk)
+                while len(buf) >= 2:
+                    ptype = buf[0] >> 4
+                    mult, val, idx = 1, 0, 1
+                    while idx < len(buf):
+                        b = buf[idx]
+                        val += (b & 0x7F) * mult
+                        idx += 1
+                        if not (b & 0x80):
+                            break
+                        mult *= 128
+                    else:
+                        break
+                    if len(buf) < idx + val:
+                        break
+                    pkt = bytes(buf[idx : idx + val])
+                    del buf[: idx + val]
+                    if ptype == 3:
+                        tlen = struct.unpack("!H", pkt[:2])[0]
+                        payload = pkt[2 + tlen :]
+                        try:
+                            data = json.loads(payload.decode("utf-8", "ignore"))
+                            if "print" in data and len(data["print"]) > 3:
+                                return data["print"]
+                        except Exception:
+                            pass
+            except socket.timeout:
+                break
+        raise TimeoutError("No status report received from Bambu printer")
 
 
 def bambu_mqtt_command(ip: str, serial: str, access_code: str, payload_obj: dict[str, Any], timeout: float = 5.0) -> None:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    with socket.create_connection((ip, 8883), timeout=timeout) as raw:
-        with ctx.wrap_socket(raw, server_hostname=ip) as s:
-            s.settimeout(timeout)
-            vh = _mqtt_str("MQTT") + bytes([4, 0xC2, 0, 60])
-            pl = _mqtt_str(f"erb335-{uuid.uuid4().hex[:6]}") + _mqtt_str("bblp") + _mqtt_str(access_code)
-            s.sendall(bytes([0x10]) + _mqtt_encode_len(len(vh) + len(pl)) + vh + pl)
-            hdr = s.recv(4)
-            if len(hdr) < 4 or hdr[0] != 0x20 or hdr[3] != 0:
-                raise RuntimeError(f"MQTT CONNACK rejected (code={hdr[3] if len(hdr) >= 4 else '?'})")
-            msg = json.dumps(payload_obj).encode("utf-8")
-            vh_pub = _mqtt_str(f"device/{serial}/request")
-            s.sendall(bytes([0x30]) + _mqtt_encode_len(len(vh_pub) + len(msg)) + vh_pub + msg)
-            time.sleep(0.3)
+    with _bambu_mqtt_connect(ip, access_code, timeout) as s:
+        msg = json.dumps(payload_obj).encode("utf-8")
+        vh_pub = _mqtt_str(f"device/{serial}/request")
+        s.sendall(bytes([0x30]) + _mqtt_encode_len(len(vh_pub) + len(msg)) + vh_pub + msg)
+        time.sleep(0.3)
 
 
 class ImplicitFTP_TLS(ftplib.FTP_TLS):
@@ -513,10 +507,7 @@ class ImplicitFTP_TLS(ftplib.FTP_TLS):
 
 
 def bambu_ftps_upload(ip: str, access_code: str, filepath: Path) -> None:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    ftp = ImplicitFTP_TLS(context=ctx)
+    ftp = ImplicitFTP_TLS(context=_bambu_tls_context())
     ftp.connect(ip, 990, timeout=15)
     ftp.login("bblp", access_code)
     ftp.prot_p()

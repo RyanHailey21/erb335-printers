@@ -60,11 +60,12 @@ erb335-printers status --octoprint         # OctoPrint only
 erb335-printers status --bambu             # Bambu Lab only
 erb335-printers status h2d                 # single printer
 
-# Files & uploading (.gcode -> OctoPrint, .3mf -> Bambu FTPS :990)
+# Files & uploading (.gcode -> OctoPrint; .gcode or .gcode.3mf -> Bambu FTPS :990)
 erb335-printers files steve --limit 10
 erb335-printers upload steve .\part.gcode --select
 erb335-printers upload steve .\part.gcode --print
-erb335-printers upload h2d .\part.3mf
+erb335-printers upload a1 .\part.gcode --print   # auto-wraps to .gcode.3mf + starts via LAN MQTT (requires Developer Mode)
+erb335-printers job a1 start --file part.gcode.3mf
 
 # Temperatures, job control & live watch
 erb335-printers temp steve --tool 235 --bed 75   # PETG example
