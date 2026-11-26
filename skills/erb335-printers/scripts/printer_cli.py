@@ -11,6 +11,7 @@ import concurrent.futures
 import ctypes
 import ctypes.wintypes as wt
 import ftplib
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -20,10 +21,12 @@ import ssl
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -518,8 +521,69 @@ def bambu_ftps_upload(ip: str, access_code: str, filepath: Path) -> None:
     ftp.login("bblp", access_code)
     ftp.prot_p()
     with filepath.open("rb") as fh:
-        ftp.storbinary(f"STOR /{filepath.name}", fh)
-    ftp.quit()
+        # Bambu FTPS servers do not send TLS close_notify on data socket unwrap();
+        # stream manually so we don't hang waiting for unwrap().
+        ftp.voidcmd("TYPE I")
+        with ftp.transfercmd(f"STOR /{filepath.name}") as conn:
+            while True:
+                buf = fh.read(65536)
+                if not buf:
+                    break
+                conn.sendall(buf)
+        try:
+            ftp.voidresp()
+        except Exception:
+            pass
+    try:
+        ftp.quit()
+    except Exception:
+        ftp.close()
+
+
+def bambu_wrap_gcode_to_3mf(gcode_path: Path, out_3mf: Path) -> str:
+    """Wrap raw Bambu .gcode into a minimal .gcode.3mf archive with MD5 for LAN project_file start."""
+    gcode_bytes = gcode_path.read_bytes()
+    md5_hex = hashlib.md5(gcode_bytes).hexdigest()
+    with zipfile.ZipFile(out_3mf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("Metadata/plate_1.gcode", gcode_bytes)
+        zf.writestr("Metadata/plate_1.gcode.md5", md5_hex)
+    return md5_hex
+
+
+def bambu_mqtt_start_project(
+    ip: str,
+    serial: str,
+    access_code: str,
+    remote_3mf_name: str,
+    md5_hex: str = "",
+    bed_type: str = "textured_plate",
+    bed_leveling: bool = True,
+    use_ams: bool = False,
+    timeout: float = 5.0,
+) -> dict[str, Any]:
+    """Start a .gcode.3mf file on a Bambu printer SD card via LAN MQTT project_file (requires Developer Mode)."""
+    fname = remote_3mf_name.lstrip("/")
+    subtask = fname.removesuffix(".gcode.3mf").removesuffix(".3mf")
+    cmd = {
+        "print": {
+            "sequence_id": "1002",
+            "command": "project_file",
+            "param": "Metadata/plate_1.gcode",
+            "url": f"file:///sdcard/{fname}",
+            "subtask_name": subtask,
+            "bed_type": bed_type,
+            "timelapse": False,
+            "bed_leveling": bed_leveling,
+            "flow_cali": False,
+            "vibration_cali": False,
+            "layer_inspect": False,
+            "use_ams": use_ams,
+        }
+    }
+    if md5_hex:
+        cmd["print"]["md5"] = md5_hex
+    bambu_mqtt_command(ip, serial, access_code, cmd, timeout=timeout)
+    return {}
 
 
 def resolve_bambu_target(name: str, bambu_cfg: dict[str, dict[str, str]]) -> tuple[str, dict[str, str]] | None:
@@ -739,10 +803,22 @@ def cmd_upload(args: argparse.Namespace) -> int:
     if bambu_match:
         name, info = bambu_match
         ip = ensure_bambu_ip(name, info, bambu_cfg)
-        bambu_ftps_upload(ip, info["access_code"], path)
-        print(f"Uploaded '{path.name}' to Bambu {name} ({ip}) via FTPS.")
-        if args.print_now:
-            print("Note: On newer Bambu firmware without Developer Mode, start the uploaded file from the touchscreen or Bambu Studio.")
+        upload_path = path
+        md5_hex = ""
+        tmp_dir_obj = None
+        if path.suffix.lower() == ".gcode":
+            tmp_dir_obj = tempfile.TemporaryDirectory()
+            upload_path = Path(tmp_dir_obj.name) / f"{path.stem}.gcode.3mf"
+            md5_hex = bambu_wrap_gcode_to_3mf(path, upload_path)
+        try:
+            bambu_ftps_upload(ip, info["access_code"], upload_path)
+            print(f"Uploaded '{upload_path.name}' to Bambu {name} ({ip}) via FTPS.")
+            if args.print_now:
+                bambu_mqtt_start_project(ip, info["serial"], info["access_code"], upload_path.name, md5_hex=md5_hex)
+                print(f"Sent project_file start for '{upload_path.name}' on Bambu {name} ({ip}).")
+        finally:
+            if tmp_dir_obj is not None:
+                tmp_dir_obj.cleanup()
         return 0
 
     client = OctoPrintClient(args.printer)
@@ -760,9 +836,16 @@ def cmd_job(args: argparse.Namespace) -> int:
     if bambu_match:
         name, info = bambu_match
         ip = ensure_bambu_ip(name, info, bambu_cfg)
+        if args.action == "start":
+            if not args.file:
+                print("Bambu 'job start' requires --file <name.gcode.3mf> (on the printer SD card).", file=sys.stderr)
+                return 1
+            bambu_mqtt_start_project(ip, info["serial"], info["access_code"], args.file)
+            print(f"Sent project_file start for '{args.file}' on Bambu {name} ({ip}).")
+            return 0
         cmd_map = {"pause": "pause", "resume": "resume", "cancel": "stop"}
         if args.action not in cmd_map:
-            print("Bambu LAN MQTT supports: pause, resume, cancel (stop).", file=sys.stderr)
+            print("Bambu LAN MQTT supports: start (--file), pause, resume, cancel (stop).", file=sys.stderr)
             return 1
         bambu_mqtt_command(ip, info["serial"], info["access_code"], {"print": {"sequence_id": "0", "command": cmd_map[args.action], "param": ""}})
         print(f"Sent '{cmd_map[args.action]}' to Bambu {name} ({ip}). (Requires Developer Mode on locked-down firmware.)")
@@ -900,6 +983,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_jb = sub.add_parser("job", help="Control current print job")
     p_jb.add_argument("printer")
     p_jb.add_argument("action", choices=["start", "pause", "resume", "cancel"])
+    p_jb.add_argument("--file", default=None, help="Remote .gcode filename on SD card (for Bambu 'job start')")
 
     # temp
     p_tp = sub.add_parser("temp", help="Set nozzle / bed target temperatures (OctoPrint)")
