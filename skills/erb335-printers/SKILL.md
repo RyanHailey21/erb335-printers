@@ -17,6 +17,7 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 - **Specs:** 220 × 220 × 270 mm, 0.4 mm nozzle, all-metal Sprite extruder (up to 300°C), heated bed (up to 110°C).
 - **Filaments:** **PLA and PETG** supported (match slicer temps to the loaded spool - e.g., ~200°C / 60°C for PLA, ~230-245°C / 70-80°C for PETG). ABS is prohibited due to fumes.
 - **Slicer Note:** OctoPrint's internal profile on these printers is left at `Generic RepRap Printer` (200×200×200 mm). Always slice using a **Creality Ender-3 S1 Pro** profile.
+- **Bed Adhesion Defaults (ERB 335 Enders):** Always ensure `M420 S1 Z10` is sent after `G28` (auto-injected by `creality-slicer`) so the saved CR-Touch bed mesh stays active. For PLA on shared textured PEI sheets, prefer `initial_layer_print_height: 0.24`, `initial_layer_speed: 25`, `initial_layer_infill_speed: 35`, `textured_plate_temp_initial_layer: 65` (60 C after), `close_fan_the_first_x_layers: 3`, and a `5 mm` outer brim (`brim_width: 5`) on narrow, tall, or small-footprint parts.
 - **Auth:** Username `student`, password `student` (session login `/api/login` + `X-CSRF-Token`, no API key).
 
 | Name | Hostname | IP | Notes |
