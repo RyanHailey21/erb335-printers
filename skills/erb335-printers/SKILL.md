@@ -27,7 +27,7 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 | **Chris** | `chris.local` | `192.168.50.107` | Excluded from default `status` (pass `--all`) |
 
 ### 4× Bambu Lab Printers (LAN MQTT `:8883` + FTPS `:990`)
-*(Requires each printer's 8-digit LAN Access Code for status/FTPS, plus **LAN Only Mode + Developer Mode** enabled on the touchscreen for automated `upload --print` / `job start` over LAN MQTT. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved. For Cloud-mode Bambu printers started via **Device -> MicroSD Card**, export native `.gcode.3mf` with `--export-3mf <bare-filename>` + `--outputdir` so `Metadata/slice_info.config` and thumbnails are included.)*
+*(All 4 Bambu printers - `h2d`, `p1s-1`, `p1s-2`, `a1` - currently run in **Bambu Cloud mode** for team access. Read-only MQTT status and FTPS SD-card upload work via each printer's 8-digit LAN Access Code; starting prints requires **Bambu Studio -> Device -> MicroSD Card** or the printer screen, unless **LAN Only Mode + Developer Mode** is enabled on the touchscreen. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved, and export native `.gcode.3mf` with `--export-3mf <bare-filename>` + `--outputdir` so `Metadata/slice_info.config` and thumbnails are included.)*
 
 | IP | Serial (TLS Cert) | Model |
 | :--- | :--- | :--- |
