@@ -531,6 +531,43 @@ def bambu_ftps_upload(ip: str, access_code: str, filepath: Path) -> None:
         ftp.close()
 
 
+BAMBU_MODEL_IDS: dict[str, str] = {
+    "A1": "N2S",
+    "A1 MINI": "N1",
+    "P1S": "C12",
+    "P1S/P1P": "C12",
+    "P1P": "C11",
+    "H2D": "O1D",
+    "X1C": "BL-P001",
+    "X1E": "C13",
+}
+
+
+def bambu_patch_3mf_model_id(src_3mf: Path, dst_3mf: Path, model: str) -> bool:
+    """Patch empty printer_model_id in Metadata/slice_info.config for Bambu Studio CLI .gcode.3mf exports."""
+    model_id = BAMBU_MODEL_IDS.get((model or "").strip().upper())
+    if not model_id:
+        return False
+    old = 'key="printer_model_id" value=""'
+    new = f'key="printer_model_id" value="{model_id}"'
+    try:
+        with zipfile.ZipFile(src_3mf, "r") as zin:
+            if "Metadata/slice_info.config" not in zin.namelist():
+                return False
+            raw_info = zin.read("Metadata/slice_info.config").decode("utf-8", errors="replace")
+            if old not in raw_info:
+                return False
+            with zipfile.ZipFile(dst_3mf, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    data = zin.read(item.filename)
+                    if item.filename == "Metadata/slice_info.config":
+                        data = raw_info.replace(old, new).encode("utf-8")
+                    zout.writestr(item, data)
+        return True
+    except Exception:
+        return False
+
+
 def bambu_wrap_gcode_to_3mf(gcode_path: Path, out_3mf: Path) -> str:
     """Wrap raw Bambu .gcode into a minimal .gcode.3mf archive with MD5 for LAN project_file start."""
     gcode_bytes = gcode_path.read_bytes()
@@ -801,6 +838,12 @@ def cmd_upload(args: argparse.Namespace) -> int:
             tmp_dir_obj = tempfile.TemporaryDirectory()
             upload_path = Path(tmp_dir_obj.name) / f"{path.stem}.gcode.3mf"
             md5_hex = bambu_wrap_gcode_to_3mf(path, upload_path)
+        elif path.suffix.lower() == ".3mf":
+            tmp_dir_obj = tempfile.TemporaryDirectory()
+            patched_path = Path(tmp_dir_obj.name) / path.name
+            if bambu_patch_3mf_model_id(path, patched_path, info.get("model", "")):
+                upload_path = patched_path
+                print(f"Patched empty printer_model_id for {info.get('model', name)} in '{path.name}'.")
         try:
             bambu_ftps_upload(ip, info["access_code"], upload_path)
             print(f"Uploaded '{upload_path.name}' to Bambu {name} ({ip}) via FTPS.")

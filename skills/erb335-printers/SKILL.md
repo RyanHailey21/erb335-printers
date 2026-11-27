@@ -27,7 +27,14 @@ Programmatic Wi-Fi + OctoPrint control for the ERB 335 Senior Design Lab 3D prin
 | **Chris** | `chris.local` | `192.168.50.107` | Excluded from default `status` (pass `--all`) |
 
 ### 4× Bambu Lab Printers (LAN MQTT `:8883` + FTPS `:990`)
-*(All 4 Bambu printers - `h2d`, `p1s-1`, `p1s-2`, `a1` - currently run in **Bambu Cloud mode** for team access. Read-only MQTT status and FTPS SD-card upload work via each printer's 8-digit LAN Access Code; starting prints requires **Bambu Studio -> Device -> MicroSD Card** or the printer screen, unless **LAN Only Mode + Developer Mode** is enabled on the touchscreen. When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved, and export native `.gcode.3mf` with `--export-3mf <bare-filename>` + `--outputdir` so `Metadata/slice_info.config` and thumbnails are included.)*
+*(All 4 Bambu printers - `h2d`, `p1s-1`, `p1s-2`, `a1` - currently run in **Bambu Cloud mode** for team access. Read-only MQTT status and FTPS SD-card upload work via each printer's 8-digit LAN Access Code; `erb335-printers upload` automatically patches empty `printer_model_id=""` in `Metadata/slice_info.config` for CLI-sliced `.gcode.3mf` files so Bambu Studio accepts them cleanly (`N2S` for A1, `C12` for P1S, `O1D` for H2D). When slicing Bambu profiles headlessly via `bambu-studio.exe --load-settings`, always merge both `"inherits"` and `"include"` template JSONs so native start/end G-code, ABL, and Textured PEI Z-offset `G29.1 Z-0.02` are preserved, and export native `.gcode.3mf` with `--export-3mf <bare-filename>` + `--outputdir` so `Metadata/slice_info.config` and thumbnails are included.)*
+
+#### Automated Cloud-Mode Print Start (via `windows-mcp` + Bambu Studio)
+On Cloud-mode Bambu printers (Authorization Control blocks unsigned LAN MQTT `project_file` start), automate starting an uploaded `.gcode.3mf` through the signed-in Bambu Studio desktop client using `windows-mcp`:
+1. Focus Bambu Studio via `windows-mcp` `PowerShell` (`Get-Process -Name 'bambu-studio'` -> `ShowWindow(..., 9)` + `SetForegroundWindow(...)`).
+2. Take a `Snapshot(use_vision=True, use_ui_tree=False)` and click **Device -> Storage -> Model** (and **Refresh** if the new file is not listed yet).
+3. Click **Print** on the uploaded `.gcode.3mf` card, verify the green **Send** button is enabled with the right printer, plate, filament, ABL, and flow calibration settings, then click **Send**.
+4. Confirm `RUNNING` / heating state with `erb335-printers status <printer>`.
 
 | IP | Serial (TLS Cert) | Model |
 | :--- | :--- | :--- |
